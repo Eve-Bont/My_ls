@@ -10,9 +10,9 @@ typedef struct element_info {
     struct stat info;
 } t_element;
 
-void verification_options_operand(int* option_a, int* option_t, int* nb_operand, int argc, char** argv);
+void verification_options_operand(int* option_a, int* option_t, int* nb_element, int argc, char** argv);
 int fill_info_element(t_element* element, struct stat info, int argc, char** argv);
 void display_directory_or_file(char* name, int option_a, int option_t, struct stat info);
-void sorting_element(t_element* element, int nb_operand_valid);
+void sorting_element(t_element* element, int nb_element_valid);
 int compare_element(t_element* a, t_element* b);
 void swap_element(t_element* a, t_element* b);

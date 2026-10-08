@@ -1,6 +1,6 @@
 #include "fonction.h"
 
-void verification_options_operand(int* option_a, int* option_t, int* nb_operand, int argc, char** argv) {
+void verification_options_operand(int* option_a, int* option_t, int* nb_element, int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-' && argv[i][1] == 'a' && argv[i][2] == '\0') {
             *option_a = 1;
@@ -10,7 +10,7 @@ void verification_options_operand(int* option_a, int* option_t, int* nb_operand,
             *option_a = 1;
             *option_t = 1;
         } else {
-            (*nb_operand)++;
+            (*nb_element)++;
         }
     }
 }
@@ -45,7 +45,7 @@ void display_directory_or_file(char* name, int option_a, int option_t, struct st
     }
 }
 
-void sorting_element(t_element* element, int nb_operand_valid) {
+void sorting_element(t_element* element, int nb_element_valid) {
     for(int i = 0; i < nb_operand_valid; i++) {
         for (int j = i + 1; j < nb_operand_valid; j++) {
             compare_element(&element[i], &element[j]);
@@ -53,25 +53,37 @@ void sorting_element(t_element* element, int nb_operand_valid) {
     }
 }
 
-int compare_element(t_element* a, t_element* b) {
+int compare_element(t_element* a, t_element* b, option_t) {
     //a fichier et b dossier
     if (S_ISDIR(a->info.st_mode) && S_ISDIR(b->info.st_mode) == 0) {
         swap_element(a, b);
+    //a et b de même type
     } else if (S_ISDIR(a->info.st_mode) == S_ISDIR(b->info.st_mode)) {
-        int i = 0;
-        while( a->name[i] != '\0') {
-            if (a->name[i] > b->name[i]) {
-                swap_element(a, b);
-                return 0;
-            }
-            if (b->name[i] == '\0') {
-                swap_element(a, b);
-                return 0;
-            }
-            i++;
+        if (option_t) {
+            compare_alphabet(a, b);
+        } else {
+            compare_date(a, b);
         }
     }
     return 0;
+}
+
+void compare_alphabet(t_element* a, t_element* b) {
+    int i = 0;
+    while( a->name[i] != '\0') {
+        if (a->name[i] > b->name[i]) {
+            swap_element(a, b);
+            return 0;
+        }
+        if (b->name[i] == '\0') {
+            swap_element(a, b);
+            return 0;
+        }
+        i++;
+    }
+}
+void compare_date(t_element* a, t_element b) {
+
 }
 
 void swap_element(t_element* a, t_element* b) {
