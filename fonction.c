@@ -1,6 +1,8 @@
 #include "fonction.h"
 
-void verification_options_element(int* option_a, int* option_t, int* nb_element, int argc, char** argv) {
+int verification_options_element(int* option_a, int* option_t, int* nb_element, int argc, char** argv) {
+    struct stat info;
+    int erreur = 0;
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-' && argv[i][1] == 'a' && argv[i][2] == '\0') {
             *option_a = 1;
@@ -9,17 +11,31 @@ void verification_options_element(int* option_a, int* option_t, int* nb_element,
         } else if (argv[i][0] == '-' && argv[i][1] == 'a' && argv[i][2] == 't' && argv[i][3] == '\0') {
             *option_a = 1;
             *option_t = 1;
-        } else {
-            struct stat info;
-            if (stat(argv[i], &info) == 0) {
+        } else if (stat(argv[i], &info) == 0) {
                 (*nb_element)++;
-            }
+        } else {
+            erreur += element_invalid(argv[i]);
         }
+    }
+    return erreur;
+}
+
+int element_invalid(char* element) {
+    if (element[0] == '-' && element[1] != '\0') {
+        //les option invalide ne créées pas de message d'erreur
+        return 0;
+    } else {
+        //les fichiers et chemins invalides, même "-", créés un message d'erreur
+        write(2, "ls: ", 4);
+        write(2, element, count_string(element));
+        write(2, ": No such file or directory\n", 28);
+        return 1;
     }
 }
 
-void fill_name_info_element(t_element* element, struct stat info, int argc, char** argv) {
+void fill_name_info_element(t_element* element, int argc, char** argv) {
     int index = 0;
+    struct stat info;
     for (int i = 1; i < argc; i++) {
         if (stat(argv[i], &info) == 0) {
             element[index].name = argv[i];
@@ -29,12 +45,13 @@ void fill_name_info_element(t_element* element, struct stat info, int argc, char
     }
 }
 
-int compare_element(t_element* a, t_element* b, int option_t) {
-    //a fichier et b dossier
-    if (S_ISDIR(a->info.st_mode) && S_ISDIR(b->info.st_mode) == 0) {
+
+int compare_element(t_element* a, t_element* b, int option_t, int inside_directory) {
+    //a dossier et b fichier
+    if (!inside_directory && S_ISDIR(a->info.st_mode) && S_ISDIR(b->info.st_mode) == 0) {
         swap_element(a, b);
     //a et b de même type
-    } else if (S_ISDIR(a->info.st_mode) == S_ISDIR(b->info.st_mode)) {
+    } else if (inside_directory || S_ISDIR(a->info.st_mode) == S_ISDIR(b->info.st_mode)) {
         if (option_t) {
             compare_date(a, b);
         } else {
@@ -51,6 +68,9 @@ void compare_alphabet(t_element* a, t_element* b) {
             swap_element(a, b);
             return;
         }
+        if (a->name[i] < b->name[i]) {
+            return;
+        }
         if (b->name[i] == '\0') {
             swap_element(a, b);
             return;
@@ -60,12 +80,12 @@ void compare_alphabet(t_element* a, t_element* b) {
 }
 
 void compare_date(t_element* a, t_element* b) {
-    if (a->info.st_mtim.tv_sec < b->info.st_mtim.tv_sec) {
+    if (a->info.st_mtimespec.tv_sec < b->info.st_mtimespec.tv_sec) {
         swap_element(a, b);
-    } else if (a->info.st_mtim.tv_sec == b->info.st_mtim.tv_sec) {
-        if (a->info.st_mtim.tv_nsec < b->info.st_mtim.tv_nsec) {
+    } else if (a->info.st_mtimespec.tv_sec == b->info.st_mtimespec.tv_sec) {
+        if (a->info.st_mtimespec.tv_nsec < b->info.st_mtimespec.tv_nsec) {
             swap_element(a, b);
-        } else if (a->info.st_mtim.tv_nsec == b->info.st_mtim.tv_nsec) {
+        } else if (a->info.st_mtimespec.tv_nsec == b->info.st_mtimespec.tv_nsec) {
             compare_alphabet(a, b);
         }
     }
@@ -77,7 +97,8 @@ void swap_element(t_element* a, t_element* b) {
     *b = c;
 }
 
-void display_directory_or_file(char* name, struct stat info, int option_a, int option_t) {
+
+int display_directory_or_file(char* name, struct stat info, int option_a, int option_t) {
     if (S_ISDIR(info.st_mode)) { //dossier
         int nb_element_in_directory = 0;
         DIR* directory_open = opendir(name);
@@ -96,6 +117,9 @@ void display_directory_or_file(char* name, struct stat info, int option_a, int o
 
             closedir(directory_open);
             t_element* element_in_directory = malloc(sizeof(t_element) * nb_element_in_directory);
+            if (element_in_directory == NULL) {
+                return 1;
+            }
 
             directory_open = opendir(name);
             if (directory_open != NULL) {
@@ -106,7 +130,7 @@ void display_directory_or_file(char* name, struct stat info, int option_a, int o
 
                     if (stat(name_file, &info) == 0 && (entry_directory_open->d_name[0] != '.' || option_a == 1)) {
                         fill_name_directory(element_in_directory, index, entry_directory_open->d_name);
-                        fill_info_directory(element_in_directory, index, element_in_directory[index].name, entry_directory_open->d_name);
+                        fill_info_directory(element_in_directory, index, name, entry_directory_open->d_name);
                         index++;
                     }
                     free(name_file);
@@ -116,7 +140,7 @@ void display_directory_or_file(char* name, struct stat info, int option_a, int o
 
                 for(int i = 0; i < nb_element_in_directory; i++) {
                     for (int j = i + 1; j < nb_element_in_directory; j++) {
-                        compare_element(&element_in_directory[i], &element_in_directory[j], option_t);
+                        compare_element(&element_in_directory[i], &element_in_directory[j], option_t, 1);
                     }
                 }
                 for (int i = 0; i < nb_element_in_directory; i++) {
@@ -129,6 +153,7 @@ void display_directory_or_file(char* name, struct stat info, int option_a, int o
     } else { //fichier
         printf("%s\n", name);
     }
+    return 0;
 }
 
 void fill_name_directory(t_element* element_in_directory, int index, char* d_name) {
@@ -168,6 +193,7 @@ void construct_name_file(int count_name, int count_d_name, char* name, char* d_n
     }
     name_file[index] = '\0';
 }
+
 
 int count_string(char* name) {
     int i = 0, count = 0;
